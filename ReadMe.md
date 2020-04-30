@@ -1,4 +1,4 @@
-### The Concise GC design
+### The Sundial GC design
 
 First, we will go over the core invariants and routines that enable type safe, pause-free GC.
 Second, we will add more complex features: destructors, rooting, polymorphism, and mutation.
