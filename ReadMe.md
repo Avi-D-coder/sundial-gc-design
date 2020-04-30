@@ -37,12 +37,12 @@ so polymorphic usage (`Gc<dyn Trace>`) produces a compile error.
 The Trace trait looks a bit like this:
 
 ```rust
-trait Trace {
-    fn shallow_trace(t: &Self, what_to_trace);
-    const FIELD_COUNT: u8;
-    const TYPE_INFO: Option<GcTypeInfo>;
-    fn child_gc_info() -> HashSet<GcTypeInfo>;
-    fn transitive_gc_info() -> HashSet<GcTypeInfo>;
+unsafe trait Trace {
+    fn trace(t: &Self);
+    const TRACE_FIELD_COUNT: u8;
+    const TRACE_TYPE_INFO: Option<GcTypeInfo>;
+    fn trace_child_type_info() -> HashSet<GcTypeInfo>;
+    fn trace_transitive_type_info() -> HashSet<GcTypeInfo>;
 }
 ```
 It has a blanket implementation for any shallowly immutable type that does not include a `Gc` (using auto traits).
@@ -139,6 +139,7 @@ Nodes in the root list include the index of the rooted object in the arena and a
 Before just before the Arena is condemned the rooted `Gc<T>`s are evacuated and the `Root<T>`s are updated by the GC thread.
 
 A similar mechanism could be generalized to support finalizers and arbitrary callbacks on evacuation.
+The proper solution to runtime polymorphic types will also use a weak Root type that contains a back reference.
 
 ### The Polymorphic Lazy Elephant in the Type
 
@@ -146,13 +147,14 @@ Polymorphism and Laziness don't fit in our disciplined graph.
 A polymorphic `Arena<dyn Trace>` breaks the first invariant.
 An arena containing a polymorphic type is a direct reference to all types.
 This would kill performance.
-Unfortunately, banning polymorphism rules out tracing through thunks.
+Unfortunately, banning polymorphism rules out tracing through polymorphic thunks.
 This is bad for the performance of laziness, but drastically simplifies it's implementation.
 Rust closures are opaque, so tracing through laziness would already require procedural macros in expression position.
 Unlike `Gc<'a, T>`, `Root<T>` does not have to be traced and can be captured by normal Rust closures, making laziness much simpler.
 
 So how do we use a polymorphic type in a GCed type we `Box` it onto the Rust heap and stick the `Box` in the `Gc` (E.g. `Gc<Box<dyn Trait>>`).
-`Gc<'r, Box<dyn Fn() -> usize>>` is type checks, if your closures needs the GC just capture a Root.
+`Gc<'r, Box<dyn Fn() -> usize>>` is type checks, if your closures needs the GC just capture a Root. Cyclic polymorphic structures require implementing weak roots.
+
 
 ### Mutation
 
