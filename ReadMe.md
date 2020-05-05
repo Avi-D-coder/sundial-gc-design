@@ -113,8 +113,15 @@ at least one CAS is required to ensure synchronization.
 When a worker thread requires a new `Arena<T>`, it performs a few atomics loads and a CAS to acquire `T`'s phase and the white regions.
 The worker may also acquire an empty Arena left by the GC thread or the remaining segment of the worker's previously freed Arena.
 The CAS acquire read ensures the worker will see most recent message and
-ensures GC writes prior to the GC's message CAS are will be observed by the worker/
-The CAS release store informs the GC that the new arena has entered the cooperative phase.
+ensures GC writes prior to the GC's message CAS are will be observed by the worker.
+
+There are two variants of the next step with different trade offs.
+Under the strict shallow invariant, the CAS release store informs the GC that the new arena has entered the cooperative phase.
+Under the lazy shallow invariant, the worker may choose to delay the cooperative phase.
+The worker lazily notifies the GC whether or not arena upholds the shallow invariant (was cooperative) only upon dropping the arena.
+The strict invariant is likely faster, but can occasionally require `O(n)` copies from the condemned set, to meet the shallow invariant.
+If you cannot afford the slightest tail latency, and need workers to never pause you must use the lazy version.
+
 Allocations made in cooperative arena uphold the invariant that no new direct pointer into the white set may be written.
 When a cooperative Arena or segment is dropped by the worker, this invariant enables it to go directly into the shallow black set.
 As workers drop their fast phase `Arena<T>`s into the owned gray set, the GC will shallow trace them until the gray set (comprised of worker's fast Arenas and GC owned Arenas/Segments) is totally empty.
